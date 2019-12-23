@@ -49,6 +49,10 @@ class BiLSTM_CRF(object):
         self.lr_pl = tf.placeholder(dtype=tf.float32, shape=[], name="lr")
 
     def lookup_layer_op(self):
+        """
+        目标把one-hot向量转换成word embedding
+        :return:
+        """
         with tf.variable_scope("words"):
             _word_embeddings = tf.Variable(self.embeddings,
                                            dtype=tf.float32,
@@ -57,9 +61,14 @@ class BiLSTM_CRF(object):
             word_embeddings = tf.nn.embedding_lookup(params=_word_embeddings,
                                                      ids=self.word_ids,
                                                      name="word_embeddings")
-        self.word_embeddings =  tf.nn.dropout(word_embeddings, self.dropout_pl)
+        self.word_embeddings = tf.nn.dropout(word_embeddings, self.dropout_pl)
 
     def biLSTM_layer_op(self):
+        """
+        有效的使用过去的信息和将来输入的信息，进行特征提取。
+        然后对句子中的每一个字打上标签
+        :return:
+        """
         with tf.variable_scope("bi-lstm"):
             cell_fw = LSTMCell(self.hidden_dim)
             cell_bw = LSTMCell(self.hidden_dim)
@@ -84,7 +93,7 @@ class BiLSTM_CRF(object):
                                 dtype=tf.float32)
 
             s = tf.shape(output)
-            output = tf.reshape(output, [-1, 2*self.hidden_dim])
+            output = tf.reshape(output, [-1, 2 * self.hidden_dim])
             pred = tf.matmul(output, W) + b
 
             self.logits = tf.reshape(pred, [-1, s[1], self.num_tags])
@@ -92,8 +101,8 @@ class BiLSTM_CRF(object):
     def loss_op(self):
         if self.CRF:
             log_likelihood, self.transition_params = crf_log_likelihood(inputs=self.logits,
-                                                                   tag_indices=self.labels,
-                                                                   sequence_lengths=self.sequence_lengths)
+                                                                        tag_indices=self.labels,
+                                                                        sequence_lengths=self.sequence_lengths)
             self.loss = -tf.reduce_mean(log_likelihood)
 
         else:
@@ -298,16 +307,15 @@ class BiLSTM_CRF(object):
         for label_, (sent, tag) in zip(label_list, data):
             tag_ = [label2tag[label__] for label__ in label_]
             sent_res = []
-            if  len(label_) != len(sent):
+            if len(label_) != len(sent):
                 print(sent)
                 print(len(label_))
                 print(tag)
             for i in range(len(sent)):
                 sent_res.append([sent[i], tag[i], tag_[i]])
             model_predict.append(sent_res)
-        epoch_num = str(epoch+1) if epoch != None else 'test'
+        epoch_num = str(epoch + 1) if epoch != None else 'test'
         label_path = os.path.join(self.result_path, 'label_' + epoch_num)
         metric_path = os.path.join(self.result_path, 'result_metric_' + epoch_num)
         for _ in conlleval(model_predict, label_path, metric_path):
             self.logger.info(_)
-
