@@ -11,6 +11,7 @@ import tensorflow as tf
 import pandas as pd
 from matplotlib import pyplot as plt
 import numpy as np
+import keras
 
 
 def test_gpu():
@@ -125,19 +126,155 @@ def logistic_regression(data_path):
 
 def image_classification(data_path=None):
     """
-    图像多分类问题
+    当label的编码方式为顺序编码，图像多分类问题
     :param data_path: 数据集的路径
     :return: null
     """
     msg = '训练完毕'
     try:
         fashion_mnist = tf.keras.datasets.fashion_mnist.load_data()  # 第一次运行会非常慢，从国外的网站下载数据
-        (train_image, train_label), (test_image, train_label) = fashion_mnist
-        print(train_image.shape)
-        print(msg)
+        (train_image, train_label), (test_image, test_label) = fashion_mnist
+        # first = train_image[0]
+        # print(np.max(train_image[0]))
+        # print(np.min(train_image[0]))
+        # plt.imshow(train_image[0])  # 画图像
+        # plt.show()
+        train_image = train_image / 255  # 把所有的数字搞到0-1之间
+        test_image = test_image / 255
+        model = tf.keras.Sequential()  # 数据准备好以后开始建模型
+        model.add(tf.keras.layers.Flatten(input_shape=(28, 28)))  # 使得二维矩阵变成一个一维向量
+        model.add(tf.keras.layers.Dense(128, activation='relu'))
+        model.add(tf.keras.layers.Dense(10, activation='softmax'))
+        model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['acc'])
+        history = model.fit(train_image, train_label, epochs=5)
+        evaluate_result = model.evaluate(test_image, test_label)  # 测试数据集来评估我们的模型
+        print(evaluate_result)
+        plt.plot(history.epoch, history.history['loss'])  # 训练次数和损失值的函数曲线图
+        plt.show()
+        plt.plot(history.epoch, history.history['acc'])  # 训练次数和精确率的函数去曲线图
+        plt.show()
         return msg
     except ImportError:
         return '程序运行有误，导致模型训练有误'
+
+
+def one_hot_encode():
+    """
+    当label的方式为独热编码时的训练方式，图像多分类问题
+    :return: null
+    """
+    fashion_mnist = tf.keras.datasets.fashion_mnist.load_data()  # 第一次运行会非常慢，从国外的网站下载数据
+    (train_image, train_label), (test_image, test_label) = fashion_mnist
+    train_image = train_image / 255  # 把所有的数字搞到0-1之间
+    test_image = test_image / 255
+    # label采取one编码，损失函数需要改变为categorical_crossentropy
+    train_label_one_hot = tf.keras.utils.to_categorical(train_label)
+    test_label_one_hot = tf.keras.utils.to_categorical(test_label)
+    model = tf.keras.Sequential()  # 数据准备好以后开始建模型
+    model.add(tf.keras.layers.Flatten(input_shape=(28, 28)))  # 使得二维矩阵变成一个一维向量
+    model.add(tf.keras.layers.Dense(128, activation='relu'))  # 这里可以添加多层，是的神经网络的拟合能力更强
+    model.add(tf.keras.layers.Dense(128, activation='relu'))
+    model.add(tf.keras.layers.Dense(128, activation='relu'))
+    model.add(tf.keras.layers.Dense(10, activation='softmax'))
+    model.summary()
+    # 可以实例化一个Adam优化器，指定学习速率指定为0.01
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss='categorical_crossentropy',
+                  metrics=['acc'])
+    history = model.fit(train_image, train_label_one_hot, epochs=100)
+    plt.plot(history.epoch, history.history.get('loss'))
+    plt.show()
+    plt.plot(history.epoch, history.history.get('acc'))
+    plt.show()
+    predict = model.predict(test_image)
+    if np.argmax(predict[0]) == np.argmax(test_label_one_hot[0]):
+        print('预测正确，并且该图片的分类是：%d' % np.argmax(predict[0]))
+    else:
+        print('预测的结果为：%d' % np.argmax(predict[0]))
+        print('正确的结果为：%d' % np.argmax(test_label_one_hot[0]))
+
+
+def over_fit():
+    """
+    过拟合问题
+    :return: 0
+    """
+    fashion_mnist = tf.keras.datasets.fashion_mnist.load_data()  # 第一次运行会非常慢，从国外的网站下载数据
+    (train_image, train_label), (test_image, test_label) = fashion_mnist
+    train_image = train_image / 255  # 把所有的数字搞到0-1之间
+    test_image = test_image / 255
+    # label采取one编码，损失函数需要改变为categorical_crossentropy
+    train_label_one_hot = tf.keras.utils.to_categorical(train_label)
+    test_label_one_hot = tf.keras.utils.to_categorical(test_label)
+    model = tf.keras.Sequential()  # 数据准备好以后开始建模型
+    model.add(tf.keras.layers.Flatten(input_shape=(28, 28)))  # 使得二维矩阵变成一个一维向量
+    model.add(tf.keras.layers.Dense(128, activation='relu'))  # 这里可以添加多层，是的神经网络的拟合能力更强
+    model.add(tf.keras.layers.Dropout(rate=0.5))  # 丢弃百分之五十的单元数
+    model.add(tf.keras.layers.Dense(128, activation='relu'))
+    model.add(tf.keras.layers.Dropout(rate=0.5))
+    model.add(tf.keras.layers.Dense(128, activation='relu'))
+    model.add(tf.keras.layers.Dropout(rate=0.5))
+    model.add(tf.keras.layers.Dense(10, activation='softmax'))
+    model.summary()
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss='categorical_crossentropy',
+                  metrics=['acc'])
+    history = model.fit(train_image, train_label_one_hot, epochs=5, validation_data=(test_image, test_label_one_hot))
+    # 如何看待过拟合和欠拟合的现象
+    plt.plot(history.epoch, history.history.get('loss'), label='loss')
+    plt.plot(history.epoch, history.history.get('val_loss'), label='val_loss')
+    plt.show()
+    plt.plot(history.epoch, history.history.get('acc'), label='acc')
+    plt.plot(history.epoch, history.history.get('val_acc'), label='val_acc')
+    plt.show()
+
+
+def reduce_network_capacity():
+    """
+    减少网络的容量，
+    :return: 0
+    """
+    fashion_mnist = tf.keras.datasets.fashion_mnist.load_data()  # 第一次运行会非常慢，从国外的网站下载数据
+    (train_image, train_label), (test_image, test_label) = fashion_mnist
+    train_image = train_image / 255  # 把所有的数字搞到0-1之间
+    test_image = test_image / 255
+    # label采取one编码，损失函数需要改变为categorical_crossentropy
+    train_label_one_hot = tf.keras.utils.to_categorical(train_label)
+    test_label_one_hot = tf.keras.utils.to_categorical(test_label)
+    model = tf.keras.Sequential()  # 数据准备好以后开始建模型
+    model.add(tf.keras.layers.Flatten(input_shape=(28, 28)))  # 使得二维矩阵变成一个一维向量
+    model.add(tf.keras.layers.Dense(32, activation='relu'))
+    model.add(tf.keras.layers.Dense(10, activation='softmax'))
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss='categorical_crossentropy',
+                  metrics=['acc'])
+    history = model.fit(train_image, train_label_one_hot, epochs=10, validation_data=(test_image, test_label_one_hot))
+    plt.plot(history.epoch, history.history['acc'], label='acc')
+    plt.plot(history.epoch, history.history['val_acc'], label='acc')
+    plt.show()
+    return 0
+
+
+def function_API():
+    """
+    函数式API
+    :return: 0
+    """
+    fashion_mnist = tf.keras.datasets.fashion_mnist
+    (train_images, train_labels), (test_images, test_labels) = fashion_mnist.load_data()
+    train_images = train_images / 255.0
+    test_images = test_images / 255.00
+    input = keras.Input(shape=(28, 28))
+    x = keras.layers.Flatten()(input)
+    x = keras.layers.Dense(32, activation='relu')(x)
+    x = keras.layers.Dropout(0.5)(x)
+    x = keras.layers.Dense(64, activation='relu')(x)
+    output = keras.layers.Dense(10, activation='softmax')(x)
+    model = keras.Model(inputs=input, outputs=output)
+    model.summary()
+    model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+    history = model.fit(train_images, train_labels, epochs=30, validation_data=(test_images, test_labels))
+    test_loss, test_accuracy = model.evaluate(test_images, test_labels)
+    plt.plot(history.epoch, history.history['loss'], label='loss')
+    plt.plot(history.epoch, history.history['acc'], label='accuracy')
+    plt.show()
 
 
 if __name__ == '__main__':
@@ -146,4 +283,8 @@ if __name__ == '__main__':
     # liner_regression(data_path='./dataset/sample_data.csv')
     # multilayer_perceptron(data_path='./dataset/Advertising.csv')
     # logistic_regression(data_path='./dataset/credit-a.csv')
-    image_classification()
+    # image_classification()
+    # one_hot_encode()
+    # over_fit()
+    # reduce_network_capacity()
+    function_API()
